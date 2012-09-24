@@ -16,8 +16,9 @@ set ( LUA_CPATH "LUA_CPATH" CACHE STRING "Environment variable to use as package
 set ( LUA_INIT "LUA_INIT" CACHE STRING "Environment variable for initial script." )
 
 option ( LUA_ANSI "Use only ansi features." OFF )
-option ( LUA_USE_RELATIVE_LOADLIB "Use modified loadlib.c with support for relative paths on posix systems." 
-  ON )
+option ( LUA_USE_RELATIVE_LOADLIB "Use modified loadlib.c with support for relative paths on posix systems." ON )
+option ( LUA_STATIC_MODULE "Search for static module libraries in ${CMAKE_INSTALL_PREFIX}/${INSTALL_CMOD}." ON )
+
 set ( LUA_IDSIZE 60 CACHE NUMBER "gives the maximum size for the description of the source." )
 set ( LUA_PROMPT "> " CACHE STRING "Is the default prompt used by stand-alone Lua." )
 set ( LUA_PROMPT2 ">> " CACHE STRING "Is the default continuation prompt used by stand-alone Lua." )
@@ -117,10 +118,11 @@ set ( SRC_LIB src/lapi.c src/lcode.c src/ldebug.c src/ldo.c src/ldump.c src/lfun
   src/lgc.c src/llex.c src/lmem.c src/lobject.c src/lopcodes.c src/lparser.c src/lstate.c 
   src/lstring.c src/ltable.c src/ltm.c src/lundump.c src/lvm.c src/lzio.c src/lauxlib.c 
   src/lbaselib.c src/ldblib.c src/liolib.c src/lmathlib.c src/loslib.c src/ltablib.c 
-  src/lstrlib.c src/linit.c )
+  src/lstrlib.c )
 set ( SRC_LUA src/lua.c )
 set ( SRC_LUAC src/luac.c src/print.c )
 
+# Use relative search paths for modules
 if ( LUA_USE_RELATIVE_LOADLIB )
   # Use modified loadlib
   list ( APPEND SRC_LIB src/loadlib_rel.c )
@@ -128,28 +130,61 @@ else ( )
   list ( APPEND SRC_LIB src/loadlib.c )
 endif ( )
 
+# Add optional static modules
+if ( LUA_STATIC_MODULE )
+  set ( LUA_STATIC_SEARCH_PATH ${CMAKE_INSTALL_PREFIX}/${INSTALL_CMOD} CACHE STRING "Path to search for static modules." )
+  # Collect static libraries
+	file ( GLOB_RECURSE STATIC_LIBS ${LUA_STATIC_SEARCH_PATH}/*${CMAKE_STATIC_LIBRARY_SUFFIX} )
+  
+  # Parse the paths of libraries and generate linit.c entries
+  foreach ( _module ${STATIC_LIBS} )
+    file ( RELATIVE_PATH _module_relative ${LUA_STATIC_SEARCH_PATH} ${_module} )
+    file ( TO_CMAKE_PATH ${_module_relative} _module_relative_cmake )
+    string ( REPLACE ${CMAKE_STATIC_LIBRARY_SUFFIX} "" _module_name ${_module_relative_cmake} )
+    string ( REPLACE "/" "." _module_name_require ${_module_name} )
+    string ( REPLACE "/" "_" _module_name_luaopen ${_module_name} )
+    
+    # Append needed static libraries to linit.c
+    set ( LUA_LINIT_STATICLIBS "${LUA_LINIT_STATICLIBS}  {\"${_module_name_require}\", luaopen_${_module_name_luaopen} },\n" )
+    set ( LUA_LINIT_DEFINITIONS  "${LUA_LINIT_DEFINITIONS}int luaopen_${_module_name_luaopen} (lua_State *L);\n" )
+    
+    # Save static module name for listing
+    list ( APPEND LUA_STATIC_MODULES ${_module_name_require} )
+  endforeach ()
+  message ( "STATIC MODULES FOUND: ${LUA_STATIC_MODULES}" )
+endif ()
+
+# Generate linit.c
+configure_file( src/linit.c.in ${CMAKE_CURRENT_BINARY_DIR}/linit.c )
+list( APPEND SRC_LIB ${CMAKE_CURRENT_BINARY_DIR}/linit.c )
+
 ## BUILD
-# Create dynamic library
-add_library ( liblua SHARED ${SRC_LIB} ${LUA_DLL_RC} ${LUA_DEF} )
-target_link_libraries ( liblua ${LIBS} )
+# Library
+add_library ( liblua ${SRC_LIB} ${LUA_DLL_RC} ${LUA_DEF} )
+target_link_libraries ( liblua ${LIBS} ${STATIC_LIBS} )
 set_target_properties ( liblua PROPERTIES OUTPUT_NAME lua CLEAN_DIRECT_OUTPUT 1 )
 
-# Create static library, this is needed to compile luac in the 5.1.x Lua series
-add_library ( liblua_static STATIC ${SRC_LIB} )
-target_link_libraries ( liblua_static ${LIBS} )
-
+# Interpretter
 add_executable ( lua ${SRC_LUA} ${LUA_RC} )
 target_link_libraries ( lua liblua )
 
-# On windows a variant of the lua interpreter without console output needs to be built
+# Windows interpreter without terminal
 if ( LUA_BUILD_WLUA )
   add_executable ( wlua WIN32 ${SRC_LUA} ${LUA_RC} )
   target_link_libraries ( wlua liblua )
   install_executable ( wlua )
 endif ( )
 
+# Lua compiler
 add_executable ( luac ${SRC_LUAC} ${LUAC_RC} )
-target_link_libraries ( luac liblua_static )
+if ( BUILD_SHARED_LIBS )
+  # We need a static library for luac
+  add_library ( liblua_static STATIC ${SRC_LIB} )
+  target_link_libraries ( liblua_static ${LIBS} ${STATIC_LIBS} )
+  target_link_libraries ( luac liblua_static )
+else ()
+  target_link_libraries ( luac liblua )
+endif()
 
 install_executable ( lua luac )
 install_library ( liblua )

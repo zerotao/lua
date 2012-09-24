@@ -12,7 +12,10 @@
 
 #include "lualib.h"
 #include "lauxlib.h"
-
+  
+//2DO: Use _PRELOAD as in Lua 5.2 for static modules
+// Define luaopen functions for static modules
+@LUA_LINIT_DEFINITIONS@
 
 static const luaL_Reg lualibs[] = {
   {"", luaopen_base},
@@ -23,16 +26,17 @@ static const luaL_Reg lualibs[] = {
   {LUA_STRLIBNAME, luaopen_string},
   {LUA_MATHLIBNAME, luaopen_math},
   {LUA_DBLIBNAME, luaopen_debug},
+// Append detected static modules
+@LUA_LINIT_STATICLIBS@
   {NULL, NULL}
 };
 
-
 LUALIB_API void luaL_openlibs (lua_State *L) {
   const luaL_Reg *lib = lualibs;
+  /* call open functions from 'loadedlibs' and set results to global table */
   for (; lib->func; lib++) {
     lua_pushcfunction(L, lib->func);
     lua_pushstring(L, lib->name);
     lua_call(L, 1, 0);
   }
 }
-
