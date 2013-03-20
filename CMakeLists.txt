@@ -41,7 +41,7 @@ if ( WIN32 AND NOT CYGWIN )
   option ( LUA_WIN "Windows specific build." ON )
   option ( LUA_BUILD_WLUA "Build wLua interpretter without console output." ON )
   option ( LUA_BUILD_AS_DLL "Build Lua library as Dll." ${BUILD_SHARED_LIBS} )
-  
+
   # Paths (Double escapes ne  option needed)
   set ( LUA_DIRSEP "\\\\" )
   string ( REPLACE " /" ${LUA_DIRSEP} LUA_DIR "${LUA_DIR}" )
@@ -61,6 +61,7 @@ else ( )
   option ( LUA_USE_AFORMAT "assume 'printf' handles 'aA' specifiers" ON )
   option ( LUA_USE_LONGLONG "assume support for long long" ON )
 endif ( )
+
 
 ## SETUP
 # Optional libraries
@@ -103,10 +104,10 @@ configure_file ( src/luaconf.h.in ${CMAKE_CURRENT_BINARY_DIR}/luaconf.h )
 
 # Sources and headers
 include_directories ( src ${CMAKE_CURRENT_BINARY_DIR} )
-set ( SRC_CORE src/lapi.c src/lcode.c src/lctype.c src/ldebug.c src/ldo.c src/ldump.c 
-  src/lfunc.c src/lgc.c src/llex.c src/lmem.c src/lobject.c src/lopcodes.c src/lparser.c 
+set ( SRC_CORE src/lapi.c src/lcode.c src/lctype.c src/ldebug.c src/ldo.c src/ldump.c
+  src/lfunc.c src/lgc.c src/llex.c src/lmem.c src/lobject.c src/lopcodes.c src/lparser.c
   src/lstate.c src/lstring.c src/ltable.c src/ltm.c src/lundump.c src/lvm.c src/lzio.c )
-set ( SRC_LIB src/lauxlib.c src/lbaselib.c src/lbitlib.c src/lcorolib.c src/ldblib.c 
+set ( SRC_LIB src/lauxlib.c src/lbaselib.c src/lbitlib.c src/lcorolib.c src/ldblib.c
   src/liolib.c src/lmathlib.c src/loslib.c src/lstrlib.c src/ltablib.c src/linit.c )
 set ( SRC_LUA src/lua.c )
 set ( SRC_LUAC src/luac.c )
@@ -120,12 +121,17 @@ endif ( )
 
 ## BUILD
 # Create lua library
-add_library ( liblua SHARED ${SRC_CORE} ${SRC_LIB} ${LUA_DLL_RC} ${LUA_DEF} )
+add_library ( liblua ${SRC_CORE} ${SRC_LIB} ${LUA_DLL_RC} ${LUA_DEF} )
 target_link_libraries ( liblua ${LIBS} )
 set_target_properties ( liblua PROPERTIES OUTPUT_NAME lua CLEAN_DIRECT_OUTPUT 1 )
 if ( LUA_BUILD_AS_DLL )
   set_target_properties ( liblua PROPERTIES COMPILE_DEFINITIONS LUA_BUILD_AS_DLL )
 endif ()
+if (UNIX AND NOT APPLE)
+    if (NOT ${BUILD_SHARED_LIBS})
+        set_target_properties(liblua PROPERTIES COMPILE_FLAGS -fPIC)
+    endif()
+endif()
 
 add_executable ( lua ${SRC_LUA} src/lua.rc )
 target_link_libraries ( lua liblua )
