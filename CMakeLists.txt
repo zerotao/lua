@@ -147,6 +147,7 @@ endif ( )
 # Create static library, this is needed to compile luac in the 5.1.x Lua series
 add_library ( liblua_static STATIC ${SRC_LIB} )
 target_link_libraries ( liblua_static ${LIBS} )
+set_target_properties(liblua_static PROPERTIES OUTPUT_NAME lua)
 
 add_executable ( lua ${SRC_LUA} ${LUA_RC} )
 target_link_libraries ( lua liblua )
@@ -163,6 +164,7 @@ target_link_libraries ( luac liblua_static )
 
 install_executable ( lua luac )
 install_library ( liblua )
+install_library ( liblua_static )
 install_data ( README.md COPYRIGHT HISTORY )
 install_lua_module ( strict etc/strict.lua )
 install_header ( src/lua.h src/lualib.h src/lauxlib.h etc/lua.hpp ${CMAKE_CURRENT_BINARY_DIR}/luaconf.h )
